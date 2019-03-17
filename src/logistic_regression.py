@@ -302,7 +302,7 @@ def feature_aic_bic(app_train, feature_name: str):
 
 
 def imputed_col_aic(data, feature_name):
-    data["intercept"] = 1.0
+    # data["intercept"] = 1.0   # is copy by reference!
     logit = sm.Logit(data["TARGET"], data[feature_name])
     result = logit.fit()
     print("AIC", result.aic)
