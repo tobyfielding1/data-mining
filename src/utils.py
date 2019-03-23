@@ -112,6 +112,24 @@ def remove_days_employed_anomaly(app_train, app_test):
     return app_train, app_test
 
 
+def remove_missing_cols(app_train, app_test, thr=0.68):
+    app_train = app_train.loc[:,
+                app_train.isnull().mean() < thr]  # remove all columns with more than x% missing values
+    print('Training Features shape: ', app_train.shape)
+    print('Testing Features shape: ', app_test.shape)
+
+    # ALIGN TEST AND TRAIN DATAFRAMES SO COLUMNS MATCH
+    train_labels = app_train['TARGET']
+    # Align the training and testing data, keep only columns present in both dataframes
+    app_train, app_test = app_train.align(app_test, join='inner', axis=1)
+    # Add the target back in
+    app_train['TARGET'] = train_labels
+
+    print('Training Features shape: ', app_train.shape)
+    print('Testing Features shape: ', app_test.shape)
+    return app_train, app_test
+
+
 def normalise_and_impute(app_train, app_test, impute_strategy='mean'):
     # Drop the target from the training data
     if 'TARGET' in app_train:
