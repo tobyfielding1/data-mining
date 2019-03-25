@@ -261,4 +261,5 @@ def imputed_col_aic(data, feature_name):
     #     data["intercept"] = 1.0
     logit = sm.Logit(data["TARGET"], data[feature_name])
     result = logit.fit()
-    print("AIC", result.aic)
+    # print("AIC", result.aic)
+    return result.aic
