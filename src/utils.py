@@ -130,6 +130,23 @@ def remove_missing_cols(app_train, app_test, thr=0.68):
     return app_train, app_test
 
 
+def mean_impute(df):
+    return df.fillna(df.mean())
+
+
+def normalise(train, test):
+    # MAKE SURE SK_CURR_ID AND TARGET have been dropped
+    scaler = MinMaxScaler(feature_range=(0, 1))  # Scale each feature to 0-1
+    scaler.fit(train)
+    train = scaler.transform(train)
+    test = scaler.transform(test)
+
+    print("NORMALISED:")
+    print('Training data shape: ', train.shape)
+    print('Testing data shape: ', test.shape)
+    return train, test
+
+
 def normalise_and_impute(app_train, app_test, impute_strategy='mean'):
     # Drop the target from the training data
     if 'TARGET' in app_train:
