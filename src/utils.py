@@ -101,8 +101,8 @@ def remove_days_employed_anomaly(app_train, app_test):
     # Replace the anomalous values with nan
     app_train['DAYS_EMPLOYED'].replace({365243: np.nan}, inplace=True)
 
-    app_train['DAYS_EMPLOYED'].plot.hist(title='Days Employment Histogram');
-    plt.xlabel('Days Employment');
+    app_train['DAYS_EMPLOYED'].plot.hist(title='Days Employment Histogram')
+    plt.xlabel('Days Employment')
 
     app_test['DAYS_EMPLOYED_ANOM'] = app_test["DAYS_EMPLOYED"] == 365243
     app_test["DAYS_EMPLOYED"].replace({365243: np.nan}, inplace=True)
