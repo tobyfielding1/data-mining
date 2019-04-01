@@ -15,6 +15,8 @@ from sklearn.model_selection import StratifiedKFold
 from scipy import interp
 import statsmodels.api as sm
 
+from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import ADASYN
 
 def save_pickle(path, data):
     # pickles the tokens dict
@@ -46,7 +48,6 @@ def load_test_data():
 def encode_binary_cols(app_train, app_test):
     # Create a label encoder object
     le = LabelEncoder()
-    le_count = 0
     encoded_cols = []
     # Iterate through the columns
     for col in app_train:
@@ -60,8 +61,6 @@ def encode_binary_cols(app_train, app_test):
                 app_test[col] = le.transform(app_test[col])
                 encoded_cols.append(col)
 
-                # Keep track of how many columns were label encoded
-                le_count += 1
     return app_train, app_test
 
 
@@ -280,3 +279,12 @@ def imputed_col_aic(data, feature_name):
     result = logit.fit()
     # print("AIC", result.aic)
     return result.aic
+
+
+def oversample(X: pd.DataFrame, y: pd.DataFrame, technique: str = 'adasyn'):
+    if technique is 'adasyn':
+        os_method = ADASYN()
+    elif technique is 'smote':
+        os_method = SMOTE()
+    X, y = os_method.fit_sample(X, y)
+    return (X, y)
