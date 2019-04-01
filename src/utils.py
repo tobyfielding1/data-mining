@@ -244,7 +244,7 @@ def cross_val_roc_curve(train_X, train_Y, classifier):
     plt.ylim([-0.05, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic example')
+    plt.title('Receiver operating characteristic')
     plt.legend(loc="lower right")
 
     print("Avg ROC AUC score: {}".format(np.mean(aucs)))
