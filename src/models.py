@@ -109,8 +109,9 @@ def gbm_basic(train_X: np.array, train_Y, test_X, feature_names, model_save_path
         valid_scores.append(valid_score)
         train_scores.append(train_score)
 
-        # Save model - will keep overwriting so saves last model in the end
-        save_pickle(model_save_path, model)
+        # Save model - will keep overwriting so saves the last fold's model
+        if model_save_path is not None:
+            save_pickle(model_save_path, model)
 
         # Clean up memory
         gc.enable()

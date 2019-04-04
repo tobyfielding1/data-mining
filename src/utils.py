@@ -112,6 +112,7 @@ def remove_days_employed_anomaly(app_train, app_test):
 
 
 def remove_missing_cols(app_train, app_test, thr=0.68):
+    print("REMOVING COLUMNS WITH {} MISSING VALUES".format(thr))
     app_train = app_train.loc[:,
                 app_train.isnull().mean() < thr]  # remove all columns with more than x% missing values
     print('Training Features shape: ', app_train.shape)
@@ -288,3 +289,51 @@ def oversample(X: pd.DataFrame, y: pd.DataFrame, technique: str = 'adasyn'):
         os_method = SMOTE()
     X, y = os_method.fit_sample(X, y)
     return (X, y)
+
+
+def plot_feature_importances(df, n=15):
+
+    """
+    Plots top n features from the feature importances assigned by a model (i.e. lgbm)
+    From https://www.kaggle.com/willkoehrsen/automated-feature-engineering-basics
+
+    Parameters
+    --------
+        df : dataframe
+            feature importances. Must have the features in a column
+            called `features` and the importances in a column called `importance
+
+    Return
+    -------
+        shows a plot of the 15 most importance features
+
+        df : dataframe
+            feature importances sorted by importance (highest to lowest)
+            with a column for normalized importance
+        """
+
+    # Sort features according to importance
+    df = df.sort_values('importance', ascending=False).reset_index()
+
+    # Normalise importances
+    df['importance_normalized'] = df['importance'] / df['importance'].sum()
+
+    # Make a horizontal bar chart of feature importances
+    plt.figure(figsize=(14, 10))
+    ax = plt.subplot()
+
+    # Need to reverse the index to plot most important on top
+    ax.barh(list(reversed(list(df.index[:n]))),
+            df['importance_normalized'].head(n),
+            align='center', edgecolor='k')
+
+    # Set the yticks and labels
+    ax.set_yticks(list(reversed(list(df.index[:n]))))
+    ax.set_yticklabels(df['feature'].head(n))
+
+    # Plot labeling
+    plt.xlabel('Normalised Importance')
+    plt.title('Feature Importances')
+    plt.show()
+
+    return df
