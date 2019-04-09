@@ -16,6 +16,7 @@ import statsmodels.api as sm
 
 from imblearn.over_sampling import SMOTE
 from imblearn.over_sampling import ADASYN
+from scipy.stats import boxcox
 
 
 def save_pickle(path, data):
@@ -222,6 +223,39 @@ def normalise(train, test):
     print('Training data shape: ', train.shape)
     print('Testing data shape: ', test.shape)
     return train, test
+
+
+def neg_days_to_years(train: pd.DataFrame, test: pd.DataFrame):
+    """
+    Converts all days columns to positive values with a years unit. Call this after dealing with DAYS_EMPLOYED anomalies
+    NOTE - may want to pass in as copy otherwise the dataframe will be updated
+    :param train:
+    :param test:
+    :return: train and test dataframes with days columns positive and in years
+    """
+
+    for col in train:
+        if "DAYS" in col and col != 'DAYS_EMPLOYED_ANOM':
+            train[[col]] = -train[col] / 365
+            test[[col]] = -test[col] / 365
+
+    #             print(col, (train[col].dropna()>=0).all()) # drop na's to show DAYS_LAST_PHONE_CHANGE is valid
+    return train, test
+
+
+def box_cox_transform(df: pd.DataFrame):
+    """
+    Apply box cox transformations to columns. Only works for numerical colums with positive values only
+    Only applied to numerical columns (excluding SK_ID_CURR)
+    :param df: Data frame to apply box cox transformations to
+    :return: transfomed dataframe and dict mapping the column to the lambda transformation value
+    """
+    lambda_map = {}
+    for col in df:
+        if df[col].dtype != 'object' and (df[col].dropna() > 0).all() and col != 'SK_ID_CURR':
+            df[[col]], lamda = boxcox(df[col])
+            lambda_map[col] = lamda
+    return df, lambda_map
 
 
 def create_and_save_submission(app_test: pd.DataFrame, predictions, save_path: str):
