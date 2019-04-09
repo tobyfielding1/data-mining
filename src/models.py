@@ -11,49 +11,79 @@ from utils import *
 
 
 def baseline_log_reg(train, train_Y, test, save_path, C=0.0001):
-    # Make the model with the specified regularization parameter
+    """
+    Creates the baseline logistic regression model
+    :param train: training data
+    :param train_Y: training labels
+    :param test: test data
+    :param save_path: file path to save model to.
+                    - If None will not save the model
+    :param C: Tunable C parameter
+    :return: Trained model and predictions for the test data (i.e. y hat)
+    """
     model = LogisticRegression(C=C)
-
-    # Train on the training data
     model.fit(train, train_Y)
 
-    # Make predictions - only require 2nd columns (representing the probability that the target is 1)
+    # Make predictions -> only require 2nd column (representing the probability that the target is 1)
     predictions = model.predict_proba(test)[:, 1]
 
     if save_path is not None:
         # Save model
-        save_pickle(save_path, model)  # save model
+        save_pickle(save_path, model)
         print("Log reg baseline model saved to: ", save_path)
 
     return model, predictions
 
 
 def random_search_log_reg(train, train_Y, test, save_path):
+    """
+    Uses random search to tune the C parameter for logistic regression and make a prediction.
+    :param train: Training data as array
+    :param train_Y: Training labels
+    :param test: Test data as array
+    :param save_path: path to save model to
+            - If None then model will not be saved
+    :return: best model from last fold and predictions for the test data
+    """
     model = LogisticRegression()
 
     # Search parameters and search space
     C = uniform(loc=0, scale=4)
     hyperparameters = dict(C=C)
 
-    # Create randomized search 5-fold cross validation and 100 iterations
+    # Create Random search using 3-fold cross validation and 10 iterations
     clf = RandomizedSearchCV(model, hyperparameters, random_state=1, n_iter=10, cv=3, verbose=3,
                              n_jobs=10)  # will take a while to run
-    # Fit randomized search
     best_model = clf.fit(train, train_Y)
-
     print('Best C:', best_model.best_estimator_.get_params()['C'])
-
     predictions = best_model.predict_proba(test)[:, 1]
 
     if save_path is not None:
         # Save model
-        save_pickle(save_path, best_model)  # save model
+        save_pickle(save_path, best_model)
         print("Log reg baseline model saved to: ", save_path)
 
     return best_model, predictions
 
 
-def gbm_basic(train_X: np.array, train_Y, test_X, feature_names, model_save_path, n_folds=5):
+def gbm_basic(train_X, train_Y, test_X, feature_names, model_save_path, n_folds=5):
+    """
+    Trains and classifies data using a light gradient boosting model. Train-validation done using k-fold validation
+    Taken & modified from https://www.kaggle.com/willkoehrsen/start-here-a-gentle-introduction
+
+    :param train_X: Training data (no labels)
+    :param train_Y: Training labels
+    :param test_X: Test data
+    :param feature_names: column names (i.e. features)
+    :param model_save_path: file path to save classifier model
+    :param n_folds: number of folds to use
+    :return: (model, test_predictions, feature_importances, metrics)
+        - classifier model
+        - predictions for the test data
+        - dataframe of features and their importances according to the lgbm model
+        - train, validation scores for each fold
+
+    """
     print('Training Data Shape: ', train_X.shape)
     print('Testing Data Shape: ', test_X.shape)
 
@@ -115,7 +145,8 @@ def gbm_basic(train_X: np.array, train_Y, test_X, feature_names, model_save_path
 
         # Clean up memory
         gc.enable()
-        del model, train_features, valid_features
+        # TODO - if becomes very slow potentially due to not gc model (which is returned) 
+        del train_features, valid_features
         gc.collect()
 
     # Make the feature importance dataframe
@@ -137,4 +168,4 @@ def gbm_basic(train_X: np.array, train_Y, test_X, feature_names, model_save_path
                             'train': train_scores,
                             'valid': valid_scores})
 
-    return test_predictions, feature_importances, metrics
+    return model, test_predictions, feature_importances, metrics
