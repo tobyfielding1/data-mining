@@ -1,4 +1,3 @@
-# numpy and pandas for data manipulation
 import warnings
 
 import numpy as np
@@ -6,7 +5,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import MinMaxScaler, Imputer
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore')  # supress warnings
 import matplotlib.pyplot as plt
 import pickle
 
@@ -18,21 +17,30 @@ import statsmodels.api as sm
 from imblearn.over_sampling import SMOTE
 from imblearn.over_sampling import ADASYN
 
+
 def save_pickle(path, data):
-    # pickles the tokens dict
+    """
+    pickles the tokens dict
+    :param path: paths to save at
+    :param data: data to pickle (can be dataframe, model ...)
+    """
     with open(path, "wb") as f:
         pickle.dump(data, f)
     print("File saved at ", path)
 
 
 def load_pickle(path):
-    # loads the tokens dict from directory
+    """
+    loads in pickled file - use to load in dataframe, model etc.
+    :param path: path to load form
+    :return: unpickled file
+    """
     with open(path, "rb") as f:
         return pickle.load(f)
     print("File loaded: ", path)
 
 
-def load_training_data():
+def load_app_training_data():
     app_train = pd.read_csv('../input/application_train.csv')
     print('Training data shape: ', app_train.shape)
     return app_train
@@ -45,143 +53,185 @@ def load_test_data():
     return app_test
 
 
-def encode_binary_cols(app_train, app_test):
-    # Create a label encoder object
+def encode_binary_cols(train: pd.DataFrame, test: pd.DataFrame):
+    """
+    Applies label encoding to the train and test dataframes.
+    Will only do this if there are more than 2 labels (nan is considered a category)
+
+    :param train: training data
+    :param test: test data
+    :return: train and test data with label encoded columns
+    """
     le = LabelEncoder()
     encoded_cols = []
-    # Iterate through the columns
-    for col in app_train:
-        if app_train[col].dtype == 'object':
+    for col in train:
+        if train[col].dtype == 'object':
             # If 2 or fewer unique categories (a nan will count as a category)
-            if len(list(app_train[col].unique())) <= 2:
+            if len(list(train[col].unique())) <= 2:
                 # Train on the training data
-                le.fit(app_train[col])
+                le.fit(train[col])
                 # Transform both training and testing data
-                app_train[col] = le.transform(app_train[col])
-                app_test[col] = le.transform(app_test[col])
+                train[col] = le.transform(train[col])
+                test[col] = le.transform(test[col])
                 encoded_cols.append(col)
+    print("Label encoded columns", encoded_cols)
 
-    return app_train, app_test
+    return train, test
 
 
-def one_hot_encode(app_train, app_test):
-    # one-hot encoding of categorical variables
+def one_hot_encode(train, test):
+    """
+    Applies one hot encoding to given dataframes
+    :param train: training data
+    :param test: testing data
+    :return: dataframes with one hot encoding applied to them
+    """
     # Dummy encoding will not create a column for nans
-    app_train = pd.get_dummies(app_train)
-    app_test = pd.get_dummies(app_test)
+    train = pd.get_dummies(train)
+    test = pd.get_dummies(test)
 
-    print("ONE HOT ENCODED")
-    print('Training Features shape: ', app_train.shape)
-    print('Testing Features shape: ', app_test.shape)
-    return app_train, app_test
-
-
-def align_data(app_train, app_test):
-    # ALIGN TEST AND TRAIN DATAFRAMES SO COLUMNS MATCH
-    train_labels = app_train['TARGET']
-
-    # Align the training and testing data, keep only columns present in both dataframes
-    app_train, app_test = app_train.align(app_test, join='inner', axis=1)
-
-    # Add the target back in
-    app_train['TARGET'] = train_labels
-
-    print("ALIGNED:")
-    print('Training Features shape: ', app_train.shape)
-    print('Testing Features shape: ', app_test.shape)
-    return app_train, app_test, train_labels
+    print("AFTER ONE HOT ENCODING")
+    print('Training Features shape: ', train.shape)
+    print('Testing Features shape: ', test.shape)
+    return train, test
 
 
-def remove_days_employed_anomaly(app_train, app_test):
-    # DEALING WITH ANOMALOUS DATA IN 'DAYS_EMPLOYED' COL
+def align_data(train, test, verbose=True):
+    """
+    Aligns the training and test dataframes so that all columns in testing are also in training (bar TARGET)
+    :param train: training dataframe
+    :param test: test dataframe
+    :return: aligned dataframes
+    """
+    train_labels = train['TARGET']
+    train, test = train.align(test, join='inner', axis=1)
+    train['TARGET'] = train_labels
 
-    # Create an anomalous flag column
-    app_train['DAYS_EMPLOYED_ANOM'] = app_train["DAYS_EMPLOYED"] == 365243
-    # Replace the anomalous values with nan
-    app_train['DAYS_EMPLOYED'].replace({365243: np.nan}, inplace=True)
+    if verbose:
+        print("AFTER ALIGNMENT:")
+        print('Training Features shape: ', train.shape)
+        print('Testing Features shape: ', test.shape)
 
-    app_train['DAYS_EMPLOYED'].plot.hist(title='Days Employment Histogram')
-    plt.xlabel('Days Employment')
-
-    app_test['DAYS_EMPLOYED_ANOM'] = app_test["DAYS_EMPLOYED"] == 365243
-    app_test["DAYS_EMPLOYED"].replace({365243: np.nan}, inplace=True)
-
-    print('There were %d anomalies in the test data out of %d entries' % (
-        app_test["DAYS_EMPLOYED_ANOM"].sum(), len(app_test)))
-    return app_train, app_test
-
-
-def remove_missing_cols(app_train, app_test, thr=0.68):
-    print("REMOVING COLUMNS WITH {} MISSING VALUES".format(thr))
-    app_train = app_train.loc[:,
-                app_train.isnull().mean() < thr]  # remove all columns with more than x% missing values
-    print('Training Features shape: ', app_train.shape)
-    print('Testing Features shape: ', app_test.shape)
-
-    # ALIGN TEST AND TRAIN DATAFRAMES SO COLUMNS MATCH
-    train_labels = app_train['TARGET']
-    # Align the training and testing data, keep only columns present in both dataframes
-    app_train, app_test = app_train.align(app_test, join='inner', axis=1)
-    # Add the target back in
-    app_train['TARGET'] = train_labels
-
-    print('Training Features shape: ', app_train.shape)
-    print('Testing Features shape: ', app_test.shape)
-    return app_train, app_test
+    return train, test
 
 
-def mean_impute(df):
-    return df.fillna(df.mean())
+def get_train_labels(train: pd.DataFrame):
+    """
+    Return the train labels
+    :param train: training dataframe containing "TARGET
+    :return: training labels i.e. y values
+    """
+    return train['TARGET']
+
+
+def remove_days_employed_anomaly(train, test):
+    """
+    Removes the 365243 anomaly (from DAYS_EMPLOYED) by replacing it with a nan. Also creates a binary feature indicating
+    at which rows this anomalous value occurred
+    :param train: training dataframe containing the DAYS_EMPLOYED columns
+    :param test: test dataframe
+    :return: train and test dataframes with the anomaly removed
+    """
+    # Make anomalous flag column
+    train['DAYS_EMPLOYED_ANOM'] = train["DAYS_EMPLOYED"] == 365243
+    # Replace anomalous values with nan
+    train['DAYS_EMPLOYED'].replace({365243: np.nan}, inplace=True)
+
+    # train['DAYS_EMPLOYED'].plot.hist(title='Days Employment Histogram')
+    # plt.xlabel('Days Employment')
+
+    # Repeat with test column
+    test['DAYS_EMPLOYED_ANOM'] = test["DAYS_EMPLOYED"] == 365243
+    test["DAYS_EMPLOYED"].replace({365243: np.nan}, inplace=True)
+
+    print('Test data contain %d anomalies out of %d rows' % (
+        test["DAYS_EMPLOYED_ANOM"].sum(), len(test)))
+    return train, test
+
+
+def remove_missing_cols(train, test, thr=0.68):
+    """
+    Removes columns from the training data with over a certain threshold of missing values. The test data is then
+    aligned
+    :param train: dataframe
+    :param test: dataframe
+    :param thr: If less than the threshold the column will be removed
+    :return:
+    """
+    print("Removing columns with {} proportion of missing values".format(thr))
+    train = train.loc[:,
+            train.isnull().mean() < thr]  # remove all columns with more than x% missing values
+    align_data(train, test, verbose=False)
+
+    print("AFTER REMOVING MISSING COLS (and aligning):")
+    print('Training Features shape: ', train.shape)
+    print('Testing Features shape: ', test.shape)
+    return train, test
+
+
+# def mean_impute(df):
+#     """
+#     Applies mean imputation to the dataframe to fill in the nans
+#     :param df: dataframe
+#     :return: dataframe with means imputed
+#     """
+#     return df.fillna(df.mean())
+
+
+def mean_imputation(train: pd.DataFrame, test: pd.DataFrame):
+    """
+    Applies mean imputation to all columns with missing values in the the train and test data
+    The imputer is fitted on the training data only and applied to both train and test, meaning that both dataframes
+    require to be aligned beforehand
+    :param train: Training data
+    :param test: Test data
+    :return: Dataframes of the train and test with all columns mean imputed
+    """
+    imputer = Imputer(strategy='mean')
+    # Fit on the training data
+    imputer.fit(train)
+    # Transform both training and testing data
+    train[train.columns] = imputer.transform(train[train.columns])
+    test[test.columns] = imputer.transform(test[test.columns])
+
+    print("AFTER MEAN IMPUTATION:")
+    print('Training data shape: ', train.shape)
+    print('Testing data shape: ', test.shape)
+
+    return train, test
 
 
 def normalise(train, test):
-    # MAKE SURE SK_CURR_ID AND TARGET have been dropped
+    """
+    Normalises features in the test and train dataframes to be between 0-1
+    MAKE SURE SK_CURR_ID AND TARGET have been dropped!
+    :param train: training dataframe
+    :param test: test dataframe
+    :return: normalised train and test dataframes
+    """
+    assert "TARGET" not in train, "TARGET column should be dropped in train"
+    assert "SK_ID_CURR" not in train, "SK_ID_CURR column should be dropped in train"
+    assert "SK_ID_CURR" not in test, "SK_ID_CURR column should be dropped in test"
+
     scaler = MinMaxScaler(feature_range=(0, 1))  # Scale each feature to 0-1
     scaler.fit(train)
-    train = scaler.transform(train)
-    test = scaler.transform(test)
+    train[train.columns] = scaler.transform(train[train.columns])
+    test[test.columns] = scaler.transform(test[test.columns])
 
-    print("NORMALISED:")
+    print("AFTER NORMALISATION:")
     print('Training data shape: ', train.shape)
     print('Testing data shape: ', test.shape)
     return train, test
 
 
-def normalise_and_impute(app_train, app_test, impute_strategy='mean'):
-    # Drop the target from the training data
-    if 'TARGET' in app_train:
-        train = app_train.drop(columns=['TARGET'])
-    else:
-        train = app_train.copy()
-    train = train.drop(columns=['SK_ID_CURR'])  #
-
-    test = app_test.copy()
-    test = test.drop(columns=['SK_ID_CURR'])  #
-
-    # Feature names
-    features = list(train.columns)
-
-    # Median imputation of missing values
-    imputer = Imputer(strategy=impute_strategy)
-    # Fit on the training data
-    imputer.fit(train)
-    # Transform both training and testing data
-    train = imputer.transform(train)
-    test = imputer.transform(test)  ### test was app_test
-
-    # Normalise
-    scaler = MinMaxScaler(feature_range=(0, 1))  # Scale each feature to 0-1
-    scaler.fit(train)
-    train = scaler.transform(train)
-    test = scaler.transform(test)
-
-    print("IMPUTED AND NORMALISED")
-    print('Training data shape: ', train.shape)
-    print('Testing data shape: ', test.shape)
-    return train, test, features
-
-
-def create_and_save_submission(app_test, predictions, save_path):
+def create_and_save_submission(app_test: pd.DataFrame, predictions, save_path: str):
+    """
+    Create a submission for the test predictions which can be uploaded onto the kaggle submission
+    :param app_test: Original app test dataframe -> Must include the column SK_ID_CURR
+    :param predictions: array containing predictions for the test data i.e. y hat
+    :param save_path: path to save the submission
+            - Should end as a .csv
+    """
     # Submission dataframe
     submit = app_test[['SK_ID_CURR']]
     submit['TARGET'] = predictions
@@ -191,14 +241,20 @@ def create_and_save_submission(app_test, predictions, save_path):
     print("Predictions saved to: ", save_path)
 
 
-def cross_val_roc_curve(train_X, train_Y, classifier):
-    # From https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc_crossval.html
+def cross_val_roc_curve(train_X: np.array, train_Y: np.array, classifier):
+    """
+    Creates a ROC AUC based off a 5 split stratified cross validation on the training data.
+    Taken from https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc_crossval.html
+    :param train_X: Training data (with no target)
+    :param train_Y: Target values
+    :param classifier: model to test on e.g. logistic regression
+    """
 
     # ROC AUC with stratified cross validation
     X = train_X
     y = train_Y
 
-    cv = StratifiedKFold(n_splits=6, shuffle=True)
+    cv = StratifiedKFold(n_splits=5, shuffle=True)
     tprs = []  # true positive rate scores
     aucs = []  # area under curve scores
     mean_fpr = np.linspace(0, 1, 100)  # mean false positive rates
@@ -245,20 +301,27 @@ def cross_val_roc_curve(train_X, train_Y, classifier):
     plt.ylim([-0.05, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic')
+    plt.title('ROC AUC')
     plt.legend(loc="lower right")
 
     print("Avg ROC AUC score: {}".format(np.mean(aucs)))
 
 
-def feature_aic_bic(app_train, feature_name: str):
+def feature_aic_bic(train: pd.DataFrame, feature_name: str):
+    """
+    Calculates and prints the statistical summary from regression results
+    (Includes statistical significance, AIC, BIC etc.)
+    :param train: Training data
+    :param feature_name: name of the column to get the statistical breakdown of
+    :return: None
+    """
     # calculates the aic and bic values between the target and a column
     # http://www.differencebetween.net/miscellaneous/difference-between-aic-and-bic/
 
-    data = app_train.copy()
+    data = train.copy()
     data = data[[feature_name, "TARGET"]]
 
-    # Median imputation of missing values
+    # mean impute for any missing values
     imputer = Imputer(strategy='mean')
     imputer.fit(data)
     imputed_data = imputer.transform(data)
@@ -269,39 +332,51 @@ def feature_aic_bic(app_train, feature_name: str):
     result = logit.fit()
 
     print("Selected Feature", feature_name)
-    result.summary2()  # uncomment for full summary
+    result.summary2()  # full summary
     # print("AIC", result.aic)
     # print("BIC", result.bic)
 
 
-def imputed_col_aic(data, feature_name):
-    #     data["intercept"] = 1.0
+def imputed_col_aic(data: pd.DataFrame, feature_name: str):
+    """
+    Calculates the AIC score of a imputed column against the TARGET
+    :param data: Dataframe containing the 'TARGET' column and the feature to compare against
+    :param feature_name: name of the feature to get the aic score of
+    :return: AIC score
+    """
     logit = sm.Logit(data["TARGET"], data[feature_name])
     result = logit.fit()
-    # print("AIC", result.aic)
     return result.aic
 
 
 def oversample(X: pd.DataFrame, y: pd.DataFrame, technique: str = 'adasyn'):
+    """
+    Oversamples the minority class to balance the classes
+    :param X: unbalanced dataset as a dataframe
+    :param y: labels for the dataset
+    :param technique: either 'SMOTE' or 'ADASYN'
+    :return: the balanced dataset and labels
+    """
     if technique is 'adasyn':
         os_method = ADASYN()
     elif technique is 'smote':
         os_method = SMOTE()
     X, y = os_method.fit_sample(X, y)
-    return (X, y)
+    return X, y
 
 
-def plot_feature_importances(df, n=15):
-
+def plot_feature_importances(fi_df, n=15):
     """
     Plots top n features from the feature importances assigned by a model (i.e. lgbm)
-    From https://www.kaggle.com/willkoehrsen/automated-feature-engineering-basics
+    Taken from https://www.kaggle.com/willkoehrsen/automated-feature-engineering-basics
 
     Parameters
     --------
-        df : dataframe
+        fi_df :
             feature importances. Must have the features in a column
             called `features` and the importances in a column called `importance
+        n: int
+            number of features to plot
 
     Return
     -------
@@ -313,27 +388,27 @@ def plot_feature_importances(df, n=15):
         """
 
     # Sort features according to importance
-    df = df.sort_values('importance', ascending=False).reset_index()
+    fi_df = fi_df.sort_values('importance', ascending=False).reset_index()
 
     # Normalise importances
-    df['importance_normalized'] = df['importance'] / df['importance'].sum()
+    fi_df['importance_normalized'] = fi_df['importance'] / fi_df['importance'].sum()
 
     # Make a horizontal bar chart of feature importances
     plt.figure(figsize=(14, 10))
     ax = plt.subplot()
 
     # Need to reverse the index to plot most important on top
-    ax.barh(list(reversed(list(df.index[:n]))),
-            df['importance_normalized'].head(n),
+    ax.barh(list(reversed(list(fi_df.index[:n]))),
+            fi_df['importance_normalized'].head(n),
             align='center', edgecolor='k')
 
     # Set the yticks and labels
-    ax.set_yticks(list(reversed(list(df.index[:n]))))
-    ax.set_yticklabels(df['feature'].head(n))
+    ax.set_yticks(list(reversed(list(fi_df.index[:n]))))
+    ax.set_yticklabels(fi_df['feature'].head(n))
 
     # Plot labeling
     plt.xlabel('Normalised Importance')
     plt.title('Feature Importances')
     plt.show()
 
-    return df
+    return fi_df
