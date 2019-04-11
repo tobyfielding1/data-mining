@@ -8,3 +8,5 @@ models/knn_corrs_rs_clf/
 src/__pycache__/
 
 input/
+
+src/\.ipynb_checkpoints/
