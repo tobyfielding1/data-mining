@@ -41,6 +41,10 @@ def load_pickle(path):
     print("File loaded: ", path)
 
 
+def load_data(filename):
+    return pd.read_csv(filename)
+
+
 def load_app_training_data():
     app_train = pd.read_csv('../input/application_train.csv')
     print('Training data shape: ', app_train.shape)
