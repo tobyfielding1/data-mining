@@ -3,6 +3,7 @@ import os
 import preprocessing as pp
 
 
+# Calls all of the pre-processing methods on the df given using the pre-processing module
 def pre_process(filename, drop_columns):
     orig_data = pp.load_data(filename)
     data = orig_data.copy()
@@ -19,6 +20,8 @@ def pre_process(filename, drop_columns):
     return data, orig_data
 
 
+# Calls the pre-processing function for each of the different files and saves them as a pickle file
+# ONLY NEEDS TO BE CALLED ONCE
 def make_processed_data():
     dir = os.getcwd()
     app_train, orig_train = pre_process(dir + '\\..\\..\\data\\application_train.csv', ['TARGET', 'SK_ID_CURR'])
@@ -57,7 +60,7 @@ def make_processed_data():
     utils.save_pickle(dir + '\\..\\pre_processed_data\\previous_application_processed', previous_application)
 
 
-make_processed_data()
+make_processed_data()  # only needs to be called once
 
 
 
