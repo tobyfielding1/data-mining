@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler, Imputer
 
 
 def load_data(filename):
-    return pd.read_csv(filename)
+    return pd.read_csv(filename, encoding='utf-8')
 
 
 def one_hot_encoding(data):
@@ -93,18 +93,18 @@ def remove_missing_cols(data, thr=0.68):
     return data
 
 
-def mean_imputation(data):
+def mean_imputation(data, train):
     """
     Applies mean imputation to all columns with missing values in the the train and test data
     The imputer is fitted on the training data only and applied to both train and test, meaning that both dataframes
     require to be aligned beforehand
-    :param data: Training data
+    :param train: Training data
     :param test: Test data
     :return: Dataframes of the train and test with all columns mean imputed
     """
     imputer = Imputer(strategy='mean')
     # Fit on the training data
-    imputer.fit(data)
+    imputer.fit(train)
     # Transform both training and testing data
     data[data.columns] = imputer.transform(data[data.columns])
     # test[test.columns] = imputer.transform(test[test.columns])
