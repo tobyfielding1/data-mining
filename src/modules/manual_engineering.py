@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import gc
+import sys
 
 # income_per_child
 # days_with_same_bank
@@ -192,14 +193,15 @@ def agg_grandchild(df, parent_df, parent_var, grandparent_var, df_name):
     parent_df = parent_df[[parent_var, grandparent_var]].copy().set_index(parent_var)
 
     # Aggregate the numeric variables at the parent level
-    df_agg = agg_numeric(df, parent_var, '%s_LOAN' % df_name)
+    # df_agg = agg_numeric(df, parent_var, '%s_LOAN' % df_name)
+    df_agg = df.copy()
 
     # Merge to get the grandparent variable in the data
     df_agg = df_agg.merge(parent_df,
                           on=parent_var, how='left')
 
     # Aggregate the numeric variables at the grandparent level
-    df_agg_client = agg_numeric(df_agg, grandparent_var, '%s_CLIENT' % df_name)
+    # df_agg_client = agg_numeric(df_agg, grandparent_var, '%s_CLIENT' % df_name)
 
     # Can only apply one-hot encoding to categorical variables
     if any(df.dtypes == 'category'):
@@ -211,25 +213,38 @@ def agg_grandchild(df, parent_df, parent_var, grandparent_var, df_name):
 
         # Aggregate the categorical variables at the grandparent level
         df_agg_cat_client = agg_numeric(df_agg_cat, grandparent_var, '%s_CLIENT' % df_name)
-        df_info = df_agg_client.merge(df_agg_cat_client, on=grandparent_var, how='outer')
+        df_info = df_agg.merge(df_agg_cat_client, on=grandparent_var, how='outer')
 
         gc.enable()
-        del df_agg, df_agg_client, df_agg_cat, df_agg_cat_client
+        del df_agg, df_agg, df_agg_cat, df_agg_cat_client
         gc.collect()
 
     # If there are no categorical variables, then we only need the numeric aggregations
     else:
-        df_info = df_agg_client.copy()
-
-        gc.enable()
-        del df_agg, df_agg_client
-        gc.collect()
-
+        df_info = df_agg.copy()
+        print('yello')
+        del df_agg
+    print('hi')
     # Drop the columns with all duplicated values
-    _, idx = np.unique(df_info, axis=1, return_index=True)
-    df_info = df_info.iloc[:, idx]
-
+    # _, idx = np.unique(df_info, axis=1, return_index=True)
+    print('pls')
+    # df_info = df_info.iloc[:, idx]
+    print('dafuq')
     return df_info
+
+
+def return_size(df):
+    """Return size of dataframe in gigabytes"""
+    return round(sys.getsizeof(df) / 1e9, 2)
+
+
+def convert_types(df):
+    print(f'Original size of data: {return_size(df)} gb.')
+    for c in df:
+        if df[c].dtype == 'object':
+            df[c] = df[c].astype('category')
+    print(f'New size of data: {return_size(df)} gb.')
+    return df
 
 
 def calculate_correlation(df, col1, col2):
