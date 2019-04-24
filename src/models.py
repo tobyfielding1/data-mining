@@ -53,7 +53,7 @@ def random_search_log_reg(train, train_Y, test, save_path):
 
     # Create Random search using 3-fold cross validation and 10 iterations
     clf = RandomizedSearchCV(model, hyperparameters, random_state=1, n_iter=10, cv=3, verbose=3,
-                             n_jobs=10)  # will take a while to run
+                             n_jobs=-1)  # will take a while to run
     best_model = clf.fit(train, train_Y)
     print('Best C:', best_model.best_estimator_.get_params()['C'])
     predictions = best_model.predict_proba(test)[:, 1]

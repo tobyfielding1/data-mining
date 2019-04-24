@@ -3,6 +3,8 @@ models/correlations/
 
 models/knn_corrs_rs_clf/
 
+dataframes/
+
 \.idea/
 
 src/__pycache__/

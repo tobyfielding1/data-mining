@@ -127,7 +127,8 @@ def get_train_labels(train: pd.DataFrame):
 
 def remove_days_employed_anomaly(train, test):
     """
-    Removes the 365243 anomaly (from DAYS_EMPLOYED) by replacing it with a nan. Also creates a binary feature indicating
+    Removes the 365243 anomaly (from DAYS_EMPLOYED) by replacing it with a nan.
+    Also creates a binary feature indicating
     at which rows this anomalous value occurred
     :param train: training dataframe containing the DAYS_EMPLOYED columns
     :param test: test dataframe
