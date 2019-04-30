@@ -51,6 +51,7 @@ def agg_numeric(df, parent_var, df_name):
     parent_ids = df[parent_var].copy()
     numeric_df = df.select_dtypes('number').copy()
     numeric_df[parent_var] = parent_ids
+    del df
 
     # Group by the specified variable and calculate the statistics
     agg = numeric_df.groupby(parent_var).agg(['count', 'mean', 'max', 'min', 'sum'])
@@ -193,15 +194,16 @@ def agg_grandchild(df, parent_df, parent_var, grandparent_var, df_name):
     parent_df = parent_df[[parent_var, grandparent_var]].copy().set_index(parent_var)
 
     # Aggregate the numeric variables at the parent level
-    # df_agg = agg_numeric(df, parent_var, '%s_LOAN' % df_name)
-    df_agg = df.copy()
+    df_agg = agg_numeric(df, parent_var, '%s_LOAN' % df_name)
+    # df_agg = df.copy()
 
     # Merge to get the grandparent variable in the data
     df_agg = df_agg.merge(parent_df,
                           on=parent_var, how='left')
 
     # Aggregate the numeric variables at the grandparent level
-    # df_agg_client = agg_numeric(df_agg, grandparent_var, '%s_CLIENT' % df_name)
+    df_agg_client = agg_numeric(df_agg, grandparent_var, '%s_CLIENT' % df_name)
+    # df_agg_client = df_agg.copy()
 
     # Can only apply one-hot encoding to categorical variables
     if any(df.dtypes == 'category'):
@@ -213,23 +215,24 @@ def agg_grandchild(df, parent_df, parent_var, grandparent_var, df_name):
 
         # Aggregate the categorical variables at the grandparent level
         df_agg_cat_client = agg_numeric(df_agg_cat, grandparent_var, '%s_CLIENT' % df_name)
-        df_info = df_agg.merge(df_agg_cat_client, on=grandparent_var, how='outer')
+        df_info = df_agg_client.merge(df_agg_cat_client, on=grandparent_var, how='outer')
 
         gc.enable()
-        del df_agg, df_agg, df_agg_cat, df_agg_cat_client
+        del df_agg, df_agg_client, df_agg_cat, df_agg_cat_client
         gc.collect()
 
     # If there are no categorical variables, then we only need the numeric aggregations
     else:
-        df_info = df_agg.copy()
-        print('yello')
-        del df_agg
-    print('hi')
+        df_info = df_agg_client.copy()
+
+        gc.enable()
+        del df_agg, df_agg_client
+        gc.collect()
+
     # Drop the columns with all duplicated values
-    # _, idx = np.unique(df_info, axis=1, return_index=True)
-    print('pls')
-    # df_info = df_info.iloc[:, idx]
-    print('dafuq')
+    _, idx = np.unique(df_info, axis=1, return_index=True)
+    df_info = df_info.iloc[:, idx]
+
     return df_info
 
 

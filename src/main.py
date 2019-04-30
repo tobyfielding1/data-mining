@@ -1,129 +1,78 @@
 import modules.utils as utils
 import os
+import gc
 import modules.preprocessing as pp
 import modules.manual_engineering as me
 
 import pandas as pd
 
 
-# Calls all of the pre-processing methods on the df given using the pre-processing module
-def pre_process(filename, drop_columns):
-    orig_data = pp.load_data(filename)
-    data = orig_data.copy()
-    data.drop(columns=drop_columns, inplace=True)
-    data = pp.encode_binary_cols(data)
-    data = pp.one_hot_encoding(data)
-    data = pp.remove_missing_cols(data)
-    data = pp.normalise(data)
+def drop_cols(df, app):
+    for column in df.columns.values.tolist():
+        if column != 'SK_ID_CURR':
+            try:
+                app.drop(column, axis=1)
+            except:
+                print("Could not drop column", column)
 
-    for col in drop_columns:
-        print(col)
-        data[col] = orig_data[col]
-
-    return data, orig_data
-
-
-# Calls the pre-processing function for each of the different files and saves them as a pickle file
-# ONLY NEEDS TO BE CALLED ONCE
-def make_processed_data():
-    dir = os.getcwd()
-
-    if not os.path.isdir(dir + '\\..\\pre_processed_data'):
-        os.makedirs(dir + '\\..\\pre_processed_data')
-
-    app_train, orig_train = pre_process(dir + '\\..\\..\\data\\application_train.csv', ['TARGET', 'SK_ID_CURR'])
-    app_test, orig_test = pre_process(dir + '\\..\\..\\data\\application_test.csv', ['SK_ID_CURR'])
-    app_train, app_test = pp.align_data(app_train, app_test)
-
-    app_train.drop(columns=['TARGET', 'SK_ID_CURR'], inplace=True)
-    app_test.drop(columns=['SK_ID_CURR'], inplace=True)
-
-    app_train = pp.mean_imputation(app_train, app_train)  # may be a bit slow
-    app_test = pp.mean_imputation(app_test, app_train)  # may be a bit slow
-
-    app_train['TARGET'] = orig_train['TARGET']
-    app_train['SK_ID_CURR'] = orig_train['SK_ID_CURR']
-    app_test['SK_ID_CURR'] = orig_test['SK_ID_CURR']
-
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\app_train_processed', app_train)
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\app_test_processed', app_test)
-
-    bureau, orig = pre_process(dir + '\\..\\..\\data\\bureau.csv', ['SK_ID_BUREAU', 'SK_ID_CURR'])
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\bureau_processed', bureau)
-
-    bureau_balance, orig = pre_process(dir + '\\..\\..\\data\\bureau_balance.csv', ['SK_ID_BUREAU'])
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\bureau_balance_processed', bureau_balance)
-
-    credit_card_balance, orig = pre_process(dir + '\\..\\..\\data\\credit_card_balance.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\credit_card_processed', credit_card_balance)
-
-    installments_payments, orig = pre_process(dir + '\\..\\..\\data\\installments_payments.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\installments_processed', installments_payments)
-
-    POS_CASH_balance, orig = pre_process(dir + '\\..\\..\\data\\POS_CASH_balance.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\cash_processed', POS_CASH_balance)
-
-    previous_application, orig = pre_process(dir + '\\..\\..\\data\\previous_application.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
-    utils.save_pickle(dir + '\\..\\pre_processed_data\\previous_processed', previous_application)
+    del df
+    return app
 
 
 def make_manual_app():
     cur_dir = os.getcwd()
     app_train = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\app_train_processed')
-    bureau = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\bureau_processed')
-    previous = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\previous_processed')
-    bureau_balance = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\bureau_balance_processed')
-    cash = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\cash_processed')
-    credit = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\credit_card_processed')
-    installments = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\installments_processed')
+    app = me.convert_types(app_train)
 
-    app = app_train.copy()
-
-    app = me.convert_types(app)
-    bureau = me.convert_types(bureau)
-    bureau_balance = me.convert_types(bureau_balance)
-    previous = me.convert_types(previous)
-    cash = me.convert_types(cash)
-    credit = me.convert_types(credit)
-    installments = me.convert_types(installments)
+    gc.enable()
+    del app_train
+    gc.collect()
 
     app['LOAN_RATE'] = app['AMT_ANNUITY'] / app['AMT_CREDIT']
     app['CREDIT_INCOME_RATIO'] = app['AMT_CREDIT'] / app['AMT_INCOME_TOTAL']
     app['EMPLOYED_BIRTH_RATIO'] = app['DAYS_EMPLOYED'] / app['DAYS_BIRTH']
     app['EXT_SOURCE_SUM'] = app[['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']].sum(axis=1)
-    app['EXT_SOURCE_MEAN'] = app[['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']].mean(axis=1)
     app['AMT_REQ_SUM'] = app[[x for x in app.columns if 'AMT_REQ_' in x]].sum(axis=1)
     app['CREDIT_TO_GOODS_RATIO'] = app['AMT_CREDIT'] / app['AMT_GOODS_PRICE']
-    app['income_per_child'] = app['AMT_INCOME_TOTAL'] / (1 + app['CNT_CHILDREN'])
-    app['payment_rate'] = app['AMT_ANNUITY'] / app['AMT_CREDIT']
-    app['income_per_person'] = app['AMT_INCOME_TOTAL'] / app['CNT_FAM_MEMBERS']
-    app['payment_rate'] = app['AMT_ANNUITY'] / app['AMT_CREDIT']
+    app['INCOME_PER_CHILD'] = app['AMT_INCOME_TOTAL'] / (1 + app['CNT_CHILDREN'])
+    app['PAYMENT_RATE'] = app['AMT_ANNUITY'] / app['AMT_CREDIT']
+    app['INCOME_PER_PERSON'] = app['AMT_INCOME_TOTAL'] / app['CNT_FAM_MEMBERS']
 
-    utils.save_pickle("app_manual", app)
-
+    gc.enable()
+    bureau = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\bureau_processed')
+    bureau = me.convert_types(bureau)
     # bureau['LOAN_RATE'] = bureau['AMT_ANNUITY'] / bureau['AMT_CREDIT_SUM']
-    # bureau_info = me.agg_numeric(bureau, 'SK_ID_CURR', 'BUREAU')
+    # bureau_info = bureau.copy()
+    bureau_info = me.agg_numeric(bureau, 'SK_ID_CURR', 'BUREAU')
 
-    # bureau_balance['PAST_DUE'] = bureau_balance['STATUS'].isin(['1', '2', '3', '4', '5'])
-    # bureau_balance['ON_TIME'] = bureau_balance['STATUS'] == '0'
+    bureau_balance = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\bureau_balance_processed')
+    bureau_balance = me.convert_types(bureau_balance)
+
     bureau_balance_info = me.agg_grandchild(bureau_balance, bureau, 'SK_ID_BUREAU', 'SK_ID_CURR', 'BB')
     print('done')
-    del bureau_balance
+    del bureau_balance, bureau
 
     app = app.set_index('SK_ID_CURR')
-    app = app.merge(bureau, on='SK_ID_CURR', how='left')
-    del bureau
+    app = app.merge(bureau_info, on='SK_ID_CURR', how='left')
+    del bureau_info
 
     app = app.merge(bureau_balance_info, on='SK_ID_CURR', how='left')
     del bureau_balance_info
-    utils.save_pickle("app_join_bureau_manual", app)
+
+    gc.collect()
+    previous = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\previous_processed')
+    previous = me.convert_types(previous)
 
     previous['LOAN_RATE'] = previous['AMT_ANNUITY'] / previous['AMT_CREDIT']
     previous["AMT_DIFFERENCE"] = previous['AMT_CREDIT'] - previous['AMT_APPLICATION']
-    # previous_info = me.agg_numeric(previous, 'SK_ID_CURR', 'PREVIOUS')
-    app = app.merge(previous, on='SK_ID_CURR', how='left')
-    del previous
-    utils.save_pickle("app_join_bureau_previous_manual", app)
+
+    previous_info = me.agg_numeric(previous, 'SK_ID_CURR', 'PREVIOUS')
+    # previous_info = previous.copy()
+    app = app.merge(previous_info, on='SK_ID_CURR', how='left')
+    del previous_info
+
+    installments = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\installments_processed')
+    installments = me.convert_types(installments)
 
     installments['LATE'] = installments['DAYS_ENTRY_PAYMENT'] > installments['DAYS_INSTALMENT']
     installments['LOW_PAYMENT'] = installments['AMT_PAYMENT'] < installments['AMT_INSTALMENT']
@@ -132,7 +81,9 @@ def make_manual_app():
 
     app = app.merge(installments_info, on='SK_ID_CURR', how='left')
     del installments_info
-    utils.save_pickle("app_join_bureau_previous_installments_manual", app)
+
+    cash = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\cash_processed')
+    cash = me.convert_types(cash)
 
     cash['LATE_PAYMENT'] = cash['SK_DPD'] > 0.0
     cash['INSTALLMENTS_PAID'] = cash['CNT_INSTALMENT'] - cash['CNT_INSTALMENT_FUTURE']
@@ -140,7 +91,9 @@ def make_manual_app():
     del cash
     app = app.merge(cash_info, on='SK_ID_CURR', how='left')
     del cash_info
-    utils.save_pickle("app_join_bureau_previous_installments_cash_manual", app)
+
+    credit = utils.load_pickle(cur_dir + '\\..\\pre_processed_data\\credit_card_processed')
+    credit = me.convert_types(credit)
 
     credit['OVER_LIMIT'] = credit['AMT_BALANCE'] > credit['AMT_CREDIT_LIMIT_ACTUAL']
     credit['BALANCE_CLEARED'] = credit['AMT_BALANCE'] == 0.0
@@ -150,37 +103,35 @@ def make_manual_app():
     del credit, previous
     app = app.merge(credit_info, on='SK_ID_CURR', how='left')
     del credit_info
-    utils.save_pickle("app_join_all", app)
 
-    # app['amt_balance_to_income'] = app['CREDIT_BALANCE_AMT_BALANCE'] / app['AMT_INCOME_TOTAL']
-    app['no_inquiries_MON_to_birth'] = app['AMT_REQ_CREDIT_BUREAU_MON'] / app['DAYS_BIRTH']
-    app['no_inquiries_DAY_to_birth'] = app['AMT_REQ_CREDIT_BUREAU_DAY'] / app['DAYS_BIRTH']
-    app['no_inquiries_WEEK_to_birth'] = app['AMT_REQ_CREDIT_BUREAU_WEEK'] / app['DAYS_BIRTH']
+    gc.enable()
+    gc.collect()
+
+    app['NO_INQUIRIES_MON_TO_BIRTH'] = app['AMT_REQ_CREDIT_BUREAU_MON'] / app['DAYS_BIRTH']
+    app['NO_INQUIRIES_DAY_TO_BIRTH'] = app['AMT_REQ_CREDIT_BUREAU_DAY'] / app['DAYS_BIRTH']
+    app['NO_INQUIRIES_WEEK_TO_BIRTH'] = app['AMT_REQ_CREDIT_BUREAU_WEEK'] / app['DAYS_BIRTH']
     app['avg_external_source'] = (app['EXT_SOURCE_1'] + app['EXT_SOURCE_2'] + app['EXT_SOURCE_3']) / 3
-    app['income_avg_external_source'] = app['AMT_INCOME_TOTAL'] / app['avg_external_source']
-    app['social_circle_obs_30_to_income'] = app['OBS_30_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
-    app['social_circle_def_30_to_income'] = app['DEF_30_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
-    app['social_circle_obs_60_to_income'] = app['OBS_60_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
-    app['social_circle_def_60_to_income'] = app['OBS_60_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
-
-    utils.save_pickle("app_join_all_manual", app)
+    app['INCOME_AVG_EXTERNAL_SOURCE'] = app['AMT_INCOME_TOTAL'] / app['avg_external_source']
+    app['SOCIAL_CIRCLE_OBS_30_TO_INCOME'] = app['OBS_30_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
+    app['SOCIAL_CIRCLE_DEF_30_TO_INCOME'] = app['DEF_30_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
+    app['SOCIAL_CIRCLE_OBS_60_TO_INCOME'] = app['OBS_60_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
+    app['SOCIAL_CIRCLE_DEF_60_TO_INCOME'] = app['OBS_60_CNT_SOCIAL_CIRCLE'] / app['AMT_INCOME_TOTAL']
 
     print('After manual feature engineering, there are {} features.'.format(app.shape[1] - 2))
 
-    targ = dict()
-    targ['TARGET'] = app['TARGET']
-    cor = targ.corrwith(targ, axis=1)
+    gc.collect()
+    # utils.save_pickle('manual_engineered_features', app)
+    app.to_csv('manual_data_added.csv')
+
     # corrs = app.corr()
     # corrs = corrs.sort_values('TARGET', ascending=False)
-    print(pd.DataFrame(cor.head(30)))
-    utils.save_pickle("manual_engineered_data", app)
+    # cor = pd.DataFrame(corrs['TARGET'])
+    # print(pd.DataFrame(corrs['TARGET'].head(30)))
+    # utils.save_pickle("correlations_manual", pd.DataFrame(cor))
+    # cor.to_csv('correlations.csv')
 
 
-# make_processed_data()  # only needs to be called once
+# pp.make_processed_data()  # only needs to be called once
 make_manual_app()
-# call function to create manual features
-# find the correlation for each of these new features
-# add the features that have a higher correlation to the df
-# save the df as a pickle
 
 
