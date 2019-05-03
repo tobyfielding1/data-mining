@@ -1,8 +1,10 @@
-import modules.utils as utils
+from src.modules import utils
+from src.modules import preprocessing as pp
+from src.modules import manual_engineering as me
+
 import os
 import gc
-import modules.preprocessing as pp
-import modules.manual_engineering as me
+
 
 import pandas as pd
 

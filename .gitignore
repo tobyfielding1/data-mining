@@ -10,3 +10,13 @@ src/__pycache__/
 input/
 
 src/\.ipynb_checkpoints/
+
+venv/
+
+data/
+
+src/cached_pickles
+
+src/manual_data_added
+
+pre_processed_data/

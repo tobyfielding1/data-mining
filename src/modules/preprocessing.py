@@ -1,4 +1,4 @@
-import modules.utils as utils
+from src.modules import utils
 import os
 
 import pandas as pd
@@ -164,8 +164,8 @@ def make_processed_data():
     if not os.path.isdir(dir + '\\..\\pre_processed_data'):
         os.makedirs(dir + '\\..\\pre_processed_data')
 
-    app_train, orig_train = pre_process(dir + '\\..\\..\\data\\application_train.csv', ['TARGET', 'SK_ID_CURR'])
-    app_test, orig_test = pre_process(dir + '\\..\\..\\data\\application_test.csv', ['SK_ID_CURR'])
+    app_train, orig_train = pre_process(dir + '\\..\\data\\application_train.csv', ['TARGET', 'SK_ID_CURR'])
+    app_test, orig_test = pre_process(dir + '\\..\\data\\application_test.csv', ['SK_ID_CURR'])
     app_train, app_test = align_data(app_train, app_test)
 
     app_train.drop(columns=['TARGET', 'SK_ID_CURR'], inplace=True)
@@ -181,21 +181,21 @@ def make_processed_data():
     utils.save_pickle(dir + '\\..\\pre_processed_data\\app_train_processed', app_train)
     utils.save_pickle(dir + '\\..\\pre_processed_data\\app_test_processed', app_test)
 
-    bureau, orig = pre_process(dir + '\\..\\..\\data\\bureau.csv', ['SK_ID_BUREAU', 'SK_ID_CURR'])
+    bureau, orig = pre_process(dir + '\\..\\data\\bureau.csv', ['SK_ID_BUREAU', 'SK_ID_CURR'])
     utils.save_pickle(dir + '\\..\\pre_processed_data\\bureau_processed', bureau)
 
-    bureau_balance, orig = pre_process(dir + '\\..\\..\\data\\bureau_balance.csv', ['SK_ID_BUREAU'])
+    bureau_balance, orig = pre_process(dir + '\\..\\data\\bureau_balance.csv', ['SK_ID_BUREAU'])
     utils.save_pickle(dir + '\\..\\pre_processed_data\\bureau_balance_processed', bureau_balance)
 
-    credit_card_balance, orig = pre_process(dir + '\\..\\..\\data\\credit_card_balance.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
+    credit_card_balance, orig = pre_process(dir + '\\..\\data\\credit_card_balance.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
     utils.save_pickle(dir + '\\..\\pre_processed_data\\credit_card_processed', credit_card_balance)
 
-    installments_payments, orig = pre_process(dir + '\\..\\..\\data\\installments_payments.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
+    installments_payments, orig = pre_process(dir + '\\..\\data\\installments_payments.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
     utils.save_pickle(dir + '\\..\\pre_processed_data\\installments_processed', installments_payments)
 
-    POS_CASH_balance, orig = pre_process(dir + '\\..\\..\\data\\POS_CASH_balance.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
+    POS_CASH_balance, orig = pre_process(dir + '\\..\\data\\POS_CASH_balance.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
     utils.save_pickle(dir + '\\..\\pre_processed_data\\cash_processed', POS_CASH_balance)
 
-    previous_application, orig = pre_process(dir + '\\..\\..\\data\\previous_application.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
+    previous_application, orig = pre_process(dir + '\\..\\data\\previous_application.csv', ['SK_ID_PREV', 'SK_ID_CURR'])
     utils.save_pickle(dir + '\\..\\pre_processed_data\\previous_processed', previous_application)
 
