@@ -1,3 +1,6 @@
+*.pkl
+*.pickle
+*.sh
 
 models/correlations/
 

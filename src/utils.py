@@ -18,6 +18,48 @@ from imblearn.over_sampling import SMOTE
 from imblearn.over_sampling import ADASYN
 from scipy.stats import boxcox
 
+import csv
+
+from timeit import default_timer as timer
+
+from tqdm import tqdm
+
+import random
+
+# Modeling
+import lightgbm as lgb
+
+# Parameter tuning
+from hyperopt import fmin
+from hyperopt import hp
+from hyperopt.pyll.stochastic import sample
+from hyperopt import tpe
+from hyperopt import Trials
+from hyperopt import STATUS_OK
+
+from functools import partial
+
+
+# do basic pre-processing
+def pre_process(train_data, test_data):
+    
+    train_data, test_data = remove_days_employed_anomaly(train_data, test_data)
+    
+    train_data, test_data = encode_binary_cols(train_data, test_data)
+    train_data, test_data = one_hot_encode(train_data, test_data)
+    train_data, test_data = align_data(train_data, test_data)
+    train_data, test_data = remove_missing_cols(train_data, test_data, thr=0.68)
+    
+    train_data, test_data = align_data(train_data, test_data)
+    
+    # need to drop TARGET and SK_ID_CURR before normalisation 
+    train_data.drop(columns=['TARGET', 'SK_ID_CURR'],inplace=True)
+    test_data.drop(columns=['SK_ID_CURR'], inplace= True)
+    train_data, test_data = mean_imputation(train_data, test_data) # may be a bit slow
+    train_data, test_data = normalise(train_data, test_data)
+
+    return train_data, test_data
+
 
 def save_pickle(path, data):
     """
@@ -447,3 +489,213 @@ def plot_feature_importances(fi_df, n=15):
     plt.show()
 
     return fi_df
+
+def lgbm_objective(hyperparameters, train_set, iteration, nfold=5):
+    """
+    Objective function for grid and random search. Returns
+    the cross validation score from a set of hyperparameters.
+    :param hyperparameters: hyperparameters instance
+    :param train_set: an LGBM dataset containing the training data and labels
+    :param iteration: the CV iteration number these hyperparameters were in
+    :param nfold: number of CV folds
+    :return : an array containing the score achieved by the current hyperparameters instance, the instance itself and the iteration number
+    """
+    
+    # Number of estimators will be found using early stopping
+    if 'n_estimators' in hyperparameters.keys():
+        del hyperparameters['n_estimators']
+    
+     # Perform n_folds cross validation
+    cv_results = lgb.cv(hyperparameters, train_set, num_boost_round = 2000, nfold = nfold, 
+                        early_stopping_rounds = 100, metrics = 'auc', seed = 1001)
+    
+    # results to retun
+    score = cv_results['auc-mean'][-1]
+    estimators = len(cv_results['auc-mean'])
+    hyperparameters['n_estimators'] = estimators 
+    
+    return [score, hyperparameters, iteration]
+
+def lgbm_hyperopt_objective(hyperparameters, train_set, nfold=5, out_file=None):
+    """
+    Objective function for Gradient Boosting Machine Hyperparameter Optimization.
+    Writes a new line to `outfile` on every iteration
+    :param hyperparameters: hyperparameters instance
+    :param train_set: an LGBM dataset containing the training data and labels
+    :param iteration: the CV iteration number these hyperparameters were in
+    :param nfold: number of CV folds
+    :return : a dictionary with information useful for evaluating the performance of a specific hyperparameters selection
+    """
+    
+    # Keep track of global variable
+    global  ITERATION
+
+    ITERATION += 1
+    
+    # Using early stopping to find number of trees trained
+    if 'n_estimators' in hyperparameters:
+        del hyperparameters['n_estimators']
+    
+    # Retrieve the subsample
+    subsample = hyperparameters['boosting_type'].get('subsample', 1.0)
+    
+    # Extract the boosting type and subsample to top level keys
+    hyperparameters['boosting_type'] = hyperparameters['boosting_type']['boosting_type']
+    hyperparameters['subsample'] = subsample
+    
+    # Make sure parameters that need to be integers are integers
+    for parameter_name in ['num_leaves', 'subsample_for_bin', 'min_child_samples']:
+        hyperparameters[parameter_name] = int(hyperparameters[parameter_name])
+
+    start = timer()
+    
+    # Perform n_folds cross validation
+    cv_results = lgb.cv(hyperparameters, train_set, num_boost_round = 10000, nfold = nfold, 
+                        early_stopping_rounds = 100, metrics = 'auc', seed = 50, verbose_eval=False)
+
+    run_time = timer() - start
+    
+    # Extract the best score
+    best_score = cv_results['auc-mean'][-1]
+    
+    # Loss must be minimized
+    loss = 1 - best_score
+    
+    # Boosting rounds that returned the highest cv score
+    n_estimators = len(cv_results['auc-mean'])
+    
+    # Add the number of estimators to the hyperparameters
+    hyperparameters['n_estimators'] = n_estimators
+
+    if out_file:
+        # Write to the csv file ('a' means append)
+        of_connection = open(out_file, 'a')
+        writer = csv.writer(of_connection)
+        writer.writerow([loss, hyperparameters, ITERATION, run_time, best_score])
+        of_connection.close()
+
+    # Dictionary with information for evaluation
+    return {'loss': loss, 'hyperparameters': hyperparameters, 'iteration': ITERATION,
+            'train_time': run_time, 'status': STATUS_OK}
+
+def random_search(trainX, trainY, nfold = 5, out_file = None, max_evals = 100):
+    """
+    Random search for hyperparameter optimization
+    :param train_X: Training data (no labels)
+    :param train_Y: Training labels
+    :param param_grid: Grid of hyperparameters
+    :param out_file: A filename to which info about parameter tuning is appended
+    :param max_evals: Upper bound for number of evaluations
+    :return results: A mapping between each cross-validation iteration and the resulting hyperparameters
+    """
+
+    # Create LGB dataset from trainX, trainY
+    train_set = lgb.Dataset(data = trainX, label = trainY)
+    
+    # Hyperparameter grid
+    param_grid = {
+        'boosting_type': ['gbdt', 'goss', 'dart'],
+        'num_leaves': list(range(20, 150)),
+        'learning_rate': list(np.logspace(np.log10(0.005), np.log10(0.5), base = 10, num = 1000)),
+        'subsample_for_bin': list(range(20000, 300000, 20000)),
+        'min_child_samples': list(range(20, 500, 5)),
+        'reg_alpha': list(np.linspace(0, 1)),
+        'reg_lambda': list(np.linspace(0, 1)),
+        'colsample_bytree': list(np.linspace(0.6, 1, 10)),
+        'subsample': list(np.linspace(0.5, 1, 100)),
+        'is_unbalance': [True, False]
+    }
+    
+    # Dataframe for results
+    results = pd.DataFrame(columns = ['score', 'params', 'iteration'],
+                                  index = list(range(max_evals)))
+    
+    # Keep searching until reach max evaluations
+    for i in tqdm(range(max_evals)):
+        
+        # Choose random hyperparameters
+        hyperparameters = {k: random.sample(v, 1)[0] for k, v in param_grid.items()}
+        hyperparameters['subsample'] = 1.0 if hyperparameters['boosting_type'] == 'goss' else hyperparameters['subsample']
+
+        # Evaluate randomly selected hyperparameters
+        eval_results = lgbm_objective(hyperparameters, train_set, i, nfold)
+        
+        results.loc[i, :] = eval_results
+        
+        if out_file:
+            # open connection (append option) and write results
+            of_connection = open(out_file, 'a')
+            writer = csv.writer(of_connection)
+            writer.writerow(eval_results)
+
+            # make sure to close connection
+            of_connection.close()
+            
+    
+    # Sort with best score on top
+    results.sort_values('score', ascending = False, inplace = True)
+    results.reset_index(inplace = True)
+    return results
+
+
+def hyperoptTPE(trainX, trainY, nfold = 5, out_file = None, max_evals = 100):
+    """
+    Random search for hyperparameter optimization
+    :param train_X: Training data (no labels)
+    :param train_Y: Training labels
+    :param param_grid: Grid of hyperparameters
+    :param out_file: A filename to which info about parameter tuning is appended
+    :param max_evals: Upper bound for number of evaluations
+    :return trials_dict: A dictionary of Hyperopt trials and the corresponding hyperparameters found for each
+    """
+    
+    # Create LGB dataset from trainX, trainY
+    train_set = lgb.Dataset(data = trainX, label = trainY)
+    
+    # Define the search space
+    space = {
+        'boosting_type': hp.choice('boosting_type', 
+                                                [{'boosting_type': 'gbdt', 'subsample': hp.uniform('gdbt_subsample', 0.5, 1)}, 
+#                                                  {'boosting_type': 'dart', 'subsample': hp.uniform('dart_subsample', 0.5, 1)},
+                                                 {'boosting_type': 'goss', 'subsample': 1.0}]),
+        'num_leaves': hp.quniform('num_leaves', 20, 150, 1),
+        'learning_rate': hp.loguniform('learning_rate', np.log(0.01), np.log(0.5)),
+        'subsample_for_bin': hp.quniform('subsample_for_bin', 20000, 300000, 20000),
+        'min_child_samples': hp.quniform('min_child_samples', 20, 500, 5),
+        'reg_alpha': hp.uniform('reg_alpha', 0.0, 1.0),
+        'reg_lambda': hp.uniform('reg_lambda', 0.0, 1.0),
+        'colsample_bytree': hp.uniform('colsample_by_tree', 0.6, 1.0),
+        'is_unbalance': hp.choice('is_unbalance', [True, False]),
+    }
+    
+    # Create the algorithm
+    tpe_algorithm = tpe.suggest
+    
+    if out_file:
+        # Create a file and open a connection
+        of_connection = open(out_file, 'w')
+        writer = csv.writer(of_connection)
+        # Write column names
+        headers = ['loss', 'hyperparameters', 'iteration', 'runtime', 'score']
+        writer.writerow(headers)
+        of_connection.close()
+
+    # Global variable
+    global  ITERATION
+
+    ITERATION = 0
+    
+    # Record results
+    trials = Trials()
+    
+    # Prepare objective function to be just a function of one parameter: hyperparameters
+    objective = partial(lgbm_hyperopt_objective, train_set=train_set, nfold=nfold, out_file=out_file)
+    
+    # Run optimization
+    best = fmin(fn = objective, space = space, algo = tpe.suggest, trials = trials,
+            max_evals = max_evals)
+    
+    # Sort the trials with lowest loss (highest AUC) first
+    trials_dict = pd.DataFrame(sorted(trials.results, key = lambda x: x['loss']))
+
+    return trials_dict
