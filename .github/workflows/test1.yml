@@ -4,12 +4,6 @@ name: CI
 
 # Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -34,3 +28,11 @@ jobs:
         run: |
           echo Add other actions to build,
           echo test, and deploy your project.
+      - name: Secure Actions Webhook
+        # You may pin to the exact commit or the version.
+        # uses: koraykoska/secure-actions-webhook@ea1321b2b866285512248ca6dff616a7695f6de3
+        uses: koraykoska/secure-actions-webhook@0.1.2
+        env:
+          REQUEST_URI: ${{ secrets.REQUEST_URI }}
+          REQUEST_DATA: "something_interesting"
+          HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
