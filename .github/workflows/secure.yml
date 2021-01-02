@@ -1,0 +1,6 @@
+- name: secure
+  uses: ybrin/secure-actions-webhook@0.1.2
+  env:
+    REQUEST_URI: ${{ secrets.REQUEST_URI }}
+    REQUEST_DATA: "something_interesting"
+    HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
